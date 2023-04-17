@@ -1,5 +1,4 @@
 import base64
-import io
 import json
 import os
 import uuid
@@ -8,7 +7,6 @@ from h3 import point_dist
 from flask import Blueprint, request, jsonify
 from constants import INVALID_LOCATION, NO_LOCATION_GIVEN, NO_RADIUS_GIVEN
 from utils import send_get_posts, send_upload_post, send_query
-from PIL import Image
 
 posts_api = Blueprint('posts_api', __name__)
 
@@ -116,6 +114,13 @@ def get_posts():
 def upload_post():
     '''Upload a post to the database and store the image in the file system'''
     # Grab the arguments provided in the request
+    print("REQUEST FORM IS " +  str(request.form))
+    print("REQUEST FILES IS " + str(request.files))
+    print("REQUEST DATA IS " + str(request.data))
+    try: 
+        print("REQUEST JSON IS " + str(request.json))
+    except:
+        pass
     
     if request.form.get('tags', None) is not None:
         tags = json.loads(request.form.get('tags'))
