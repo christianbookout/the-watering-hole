@@ -88,59 +88,25 @@ class TakePhotoScreenState extends State<TakePhotoScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              FloatingActionButton(
-                key: const ValueKey("UploadImage"),
-                // Provide an onPressed callback.
-                onPressed: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) => ChoosePictureScreen(
-                          // Context needed for building page
-                          )));
-                },
-                child: const Icon(Icons.image),
-              ),
-              FloatingActionButton(
-                key: const ValueKey("TakePicture"),
-                // Provide an onPressed callback.
-                onPressed: () async {
-                  // Take the Picture in a try / catch block. If anything goes wrong,
-                  // catch the error.
-                  try {
-                    // Ensure that the camera is initialized.
-                    await _initializeControllerFuture;
-
-                    // Attempt to take a picture and then get the location
-                    // where the image file is saved.
-                    final image = await _controller.takePicture();
-                    if (!mounted) {
-                      return;
-                    }
-                    await Navigator.of(context).push(MaterialPageRoute(
-                        builder: (context) => DisplayPictureScreen(
-                              imagePath: image.path,
-                            )));
-                  } catch (e) {
-                    // If an error occurs, log the error to the console.
-                    print(e);
-                  }
-                },
-              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   FloatingActionButton(
-                    // Provide an onPressed callback.
+                    heroTag: null,
+                    key: const ValueKey("UploadImage"),
                     onPressed: () async {
+                      var imagePath = await _getFromGallery();
+                      if (imagePath == null) return;
                       await Navigator.of(context).push(MaterialPageRoute(
-                          builder: (context) => ChoosePictureScreen(
-                              // Context needed for building page
+                          builder: (context) => UploadPostScreen(
+                                imagePath: imagePath,
                               )));
                     },
                     child: const Icon(Icons.image),
                   ),
                   FloatingActionButton(
+                    heroTag: null,
                     key: const ValueKey("CameraButton"),
-                    // Provide an onPressed callback.
                     onPressed: () async {
                       // Take the Picture in a try / catch block. If anything goes wrong,
                       // catch the error.
@@ -155,7 +121,7 @@ class TakePhotoScreenState extends State<TakePhotoScreen> {
                           return;
                         }
                         await Navigator.of(context).push(MaterialPageRoute(
-                            builder: (context) => DisplayPictureScreen(
+                            builder: (context) => UploadPostScreen(
                                   imagePath: image.path,
                                 )));
                       } catch (e) {
@@ -163,7 +129,6 @@ class TakePhotoScreenState extends State<TakePhotoScreen> {
                         print(e);
                       }
                     },
-
                     child: const Icon(Icons.camera_alt),
                   ),
                 ],
@@ -174,7 +139,16 @@ class TakePhotoScreenState extends State<TakePhotoScreen> {
   }
 }
 
-class DisplayPictureScreen extends StatelessWidget {
+Widget showImage(String? path) {
+  if (path == null) return Container();
+  var imageFile = File(path);
+  var imageExists = imageFile.existsSync();
+  if (!imageExists) return Container();
+  var image = Image.file(imageFile, width: 300, height: 300);
+  return image;
+}
+
+class UploadPostScreen extends StatelessWidget {
   final String imagePath;
   final String hintText1 =
       "Tags separated by commas (eg. bird, peacock, george)";
@@ -184,159 +158,73 @@ class DisplayPictureScreen extends StatelessWidget {
   final latitude = TextEditingController();
   final longitude = TextEditingController();
   final tags = TextEditingController();
-  var img = null;
 
-  DisplayPictureScreen({super.key, required this.imagePath});
+  UploadPostScreen({super.key, required this.imagePath});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Post Preview: Camera')),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          Image.file(File(imagePath)),
-          TextField(
-            key: const ValueKey("TagInput"),
-            controller: tags,
-            keyboardType: TextInputType.text,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText1,
+      body: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            showImage(imagePath),
+            TextField(
+              key: const ValueKey("TagInput"),
+              controller: tags,
+              keyboardType: TextInputType.text,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                labelText: hintText1,
+              ),
             ),
-          ),
-          TextField(
-            key: const ValueKey("LatitudeInput"),
-            controller: latitude,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText2,
+            TextField(
+              key: const ValueKey("LatitudeInput"),
+              controller: latitude,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                labelText: hintText2,
+              ),
             ),
-          ),
-          TextField(
-            key: const ValueKey("LongitudeInput"),
-            controller: longitude,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText3,
+            TextField(
+              key: const ValueKey("LongitudeInput"),
+              controller: longitude,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                labelText: hintText3,
+              ),
             ),
-          ),
-          FloatingActionButton(
-            // Provide an onPressed callback.
-            onPressed: () async {
-              //send upload to backend
-              var tagsList = tags.text.split(',');
-              double lat = double.parse(latitude.text);
-              double long = double.parse(longitude.text);
-              img = File(imagePath);
+            FloatingActionButton(
+              heroTag: null,
+              // Provide an onPressed callback.
+              onPressed: () async {
+                //send upload to backend
+                var tagsList = tags.text.split(',');
+                double lat = double.parse(latitude.text);
+                double long = double.parse(longitude.text);
 
-              if (img != null) {
+                var img = File(imagePath);
                 var post =
                     Post(id: 1, tags: tagsList, latitude: lat, longitude: long);
                 post.imageFile = img;
                 uploadPost(post);
                 Navigator.pop(context);
-              }
-            },
-            child: const Icon(Icons.send),
-          ),
-        ],
+              },
+              child: const Icon(Icons.send),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-Future<File?> _getFromGallery() async {
+Future<String?> _getFromGallery() async {
   XFile? pickedFile = await ImagePicker().pickImage(
     source: ImageSource.gallery,
   );
-  if (pickedFile != null) {
-    File imageFile = File(pickedFile.path);
-    return (imageFile);
-  }
-  return null;
-}
-
-class ChoosePictureScreen extends StatelessWidget {
-  ChoosePictureScreen({
-    super.key,
-  });
-
-  final String hintText1 =
-      "Tags separated by commas (eg. bird, peacock, george)";
-  final String hintText2 = "Latitude";
-  final String hintText3 = "Longitude";
-
-  final latitude = TextEditingController();
-  final longitude = TextEditingController();
-  final tags = TextEditingController();
-  File? img = null;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Post Preview: Gallery')),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          TextField(
-            controller: tags,
-            keyboardType: TextInputType.text,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText1,
-            ),
-          ),
-          TextField(
-            controller: latitude,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText2,
-            ),
-          ),
-          TextField(
-            controller: longitude,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: hintText3,
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              FloatingActionButton(
-                // Provide an onPressed callback.
-                onPressed: () async {
-                  img = await _getFromGallery();
-                },
-                child: const Icon(Icons.image),
-              ),
-              FloatingActionButton(
-                // Provide an onPressed callback.
-                onPressed: () async {
-                  //send upload to backend
-                  var tagsList = tags.text.split(',');
-                  double lat = double.parse(latitude.text);
-                  double long = double.parse(longitude.text);
-
-                  if (img != null) {
-                    var post = Post(
-                        id: 1, tags: tagsList, latitude: lat, longitude: long);
-                    post.imageFile = img;
-                    uploadPost(post);
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Icon(Icons.send),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  return pickedFile?.path;
 }
