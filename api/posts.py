@@ -54,6 +54,7 @@ def get_tags():
         return "No id provided", 400
     tags = send_query("SELECT Tag FROM Tags WHERE PostID = %s", [id])
     tags = [tag[0] for tag in tags if tag[0] != "ENDLIST"]
+    close_db()
     return jsonify(tags), 200
 
 @posts_api.route('/getImage', methods=['GET'])
@@ -66,6 +67,7 @@ def get_image():
     try:
         url = send_query("SELECT ImageURL FROM Posts WHERE PostID = %s", [id])[0][0]
         image = base64.b64encode(open(IMAGE_DIR + url, 'rb').read())
+        close_db()
         return image, 200
     except:
         return "Something went wrong...", 400
@@ -149,6 +151,7 @@ def upload_post():
     tags = str_tags(tags)
     cmd_params = [image_path, latitude, longitude, user, tags]
     send_upload_post(cmd_params)
+    close_db()
     return "", 200
 
 # @posts_api.route('/removePost/<id>', methods=['DELETE'])
