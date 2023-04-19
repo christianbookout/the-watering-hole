@@ -20,8 +20,8 @@ class Post {
       required this.latitude,
       required this.longitude});
 
-  Post.all(this.id, this.tags, this.latitude, this.longitude,
-      [this.imageFile, this.date, this.poster, this.views]);
+  Post.all(this.id, this.tags, this.latitude, this.longitude, this.imageFile,
+      this.date, this.poster, this.views);
 
   @override
   String toString() {
@@ -37,12 +37,10 @@ Future<Image> getImage(int postID) async {
   var request = Uri.http(url, 'posts/getImage', {'id': postID.toString()});
   var response = await http.get(request);
   if (response.statusCode == 200) {
-    print("Yes ${postID}");
-    return Image.memory(base64Decode(response.body),
-        key: const ValueKey('image'));
+    return Image.memory(base64Decode(response.body));
   } else {
-    print("No ${postID}");
-    throw Exception("Failed to get image");
+    throw Exception(
+        "Failed to get image for post $postID with error code ${response.statusCode}");
   }
 }
 
@@ -93,15 +91,8 @@ Future<List<Post>> getPosts(
     var json = jsonDecode(response.body);
     List<Post> posts = <Post>[];
     for (var v in json) {
-      posts.add(Post.all(
-          v["id"],
-          [],
-          v["latitude"],
-          v["longitude"],
-          null,
-          DateTime.now(), // TODO time
-          v["poster"],
-          v["views"]));
+      posts.add(Post.all(v["id"], v["tags"], v["latitude"], v["longitude"],
+          null, DateTime.tryParse(v["date"]), v["poster"], v["views"]));
     }
     return posts;
   } else if (response.statusCode == 400) {

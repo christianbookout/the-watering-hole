@@ -46,17 +46,6 @@ def filter_location(json_results, latitude, longitude, radius):
             filtered_results.append(result)
     return filtered_results
 
-@posts_api.route('/getTags', methods=['GET'])
-def get_tags():
-    '''Get a list of tags from the server by id'''
-    id = request.args.get('id', None)
-    if id is None:
-        return "No id provided", 400
-    tags = send_query("SELECT Tag FROM Tags WHERE PostID = %s", [id])
-    tags = [tag[0] for tag in tags if tag[0] != "ENDLIST"]
-    close_db()
-    return jsonify(tags), 200
-
 @posts_api.route('/getImage', methods=['GET'])
 def get_image():
     '''Get an image from the server by id'''
@@ -74,6 +63,7 @@ def get_image():
 
 @posts_api.route('/getPosts', methods=['GET'])
 def get_posts():
+    start_time = datetime.now()
     '''Get posts from the database by location, page number, radius, and tags'''
     # Grab the arguments provided in the request
     tags = request.args.getlist('tags')
@@ -107,12 +97,21 @@ def get_posts():
         pageNum = int(pageNum)
     cmd_params.insert(0, pageNum)
     res = send_get_posts(cmd_params)
-    res = jsonify_get(res)
-    res = filter_location(res, float(latitude), float(longitude), float(radius)) if radius is not None else res
+    # If there are no results, return an empty list as the next steps are unnecessary
+    if not res:
+        return jsonify(res), 200
+    
+    response_json = jsonify_get(res)
+    # Filter the results by location if a location was specified
+    # Only have to check by radius because we already checked that the location was valid
+    if radius is not None:
+        response_json = filter_location(response_json, float(latitude), float(longitude), float(radius))
 
-    # Set the tags for the result
+    # Set the tags for the result posts
+    string_tuple = "(" + ",".join(["%s"] * len(res)) + ")"
+    tag_list = send_query("SELECT Tag, PostID FROM Tags WHERE PostID IN " + string_tuple, tuple([result["id"] for result in res]))
     for result in res:
-        result["tags"] = send_query("SELECT Tag FROM Tags WHERE PostID = %s", [result["id"]])
+        result["tags"] = [tag[0] for tag in tag_list if tag[0] != "ENDLIST" and tag[1] == result["id"]]
 
     close_db()
 
