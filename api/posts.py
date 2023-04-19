@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime
 import json
 import os
 import uuid
@@ -6,7 +7,7 @@ import uuid
 from h3 import point_dist
 from flask import Blueprint, request, jsonify
 from constants import INVALID_LOCATION, NO_LOCATION_GIVEN, NO_RADIUS_GIVEN
-from utils import send_get_posts, send_upload_post, send_query
+from utils import send_get_posts, send_upload_post, send_query, close_db
 
 posts_api = Blueprint('posts_api', __name__)
 
@@ -72,7 +73,6 @@ def get_image():
 @posts_api.route('/getPosts', methods=['GET'])
 def get_posts():
     '''Get posts from the database by location, page number, radius, and tags'''
-    
     # Grab the arguments provided in the request
     tags = request.args.getlist('tags')
     latitude = request.args.get('latitude', None)
@@ -108,20 +108,18 @@ def get_posts():
     res = jsonify_get(res)
     res = filter_location(res, float(latitude), float(longitude), float(radius)) if radius is not None else res
 
+    # Set the tags for the result
+    for result in res:
+        result["tags"] = send_query("SELECT Tag FROM Tags WHERE PostID = %s", [result["id"]])
+
+    close_db()
+
     return jsonify(res), 200
 
 @posts_api.route('/uploadPost', methods=['POST'])
 def upload_post():
     '''Upload a post to the database and store the image in the file system'''
     # Grab the arguments provided in the request
-    print("REQUEST FORM IS " +  str(request.form))
-    print("REQUEST FILES IS " + str(request.files))
-    print("REQUEST DATA IS " + str(request.data))
-    try: 
-        print("REQUEST JSON IS " + str(request.json))
-    except:
-        pass
-    
     if request.form.get('tags', None) is not None:
         tags = json.loads(request.form.get('tags'))
     else: 
@@ -153,14 +151,20 @@ def upload_post():
     send_upload_post(cmd_params)
     return "", 200
 
-# @posts_api.route('/removePost', methods=['DELETE'])
-# def remove_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/removePost/<id>', methods=['DELETE'])
+# def remove_post(id):
+#     res = send_query("DELETE FROM Posts WHERE PostID = %s", [id])
+#     print("Res from delete is " + str(res))
+#     return "", 200
 
-# @posts_api.route('/viewPost', methods=['PATCH'])
-# def view_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/viewPost/<id>', methods=['PATCH'])
+# def view_post(id):
+#     res = send_query("UPDATE Posts SET Views = Views + 1 WHERE PostID = %s", [id])
+#     print("Res from update is " + str(res))
+#     return "", 200
 
-# @posts_api.route('/updatePost', methods=['PATCH'])
-# def update_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/updatePost/<id>', methods=['PATCH'])
+# def update_post(id):
+#     '''Update a post in the database'''
+
+#     return "", 200
