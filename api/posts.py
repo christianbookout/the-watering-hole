@@ -1,5 +1,5 @@
 import base64
-import io
+from datetime import datetime
 import json
 import os
 import uuid
@@ -7,8 +7,7 @@ import uuid
 from h3 import point_dist
 from flask import Blueprint, request, jsonify
 from constants import INVALID_LOCATION, NO_LOCATION_GIVEN, NO_RADIUS_GIVEN
-from utils import send_get_posts, send_upload_post, send_query
-from PIL import Image
+from utils import send_get_posts, send_upload_post, send_query, close_db
 
 posts_api = Blueprint('posts_api', __name__)
 
@@ -47,16 +46,6 @@ def filter_location(json_results, latitude, longitude, radius):
             filtered_results.append(result)
     return filtered_results
 
-@posts_api.route('/getTags', methods=['GET'])
-def get_tags():
-    '''Get a list of tags from the server by id'''
-    id = request.args.get('id', None)
-    if id is None:
-        return "No id provided", 400
-    tags = send_query("SELECT Tag FROM Tags WHERE PostID = %s", [id])
-    tags = [tag[0] for tag in tags if tag[0] != "ENDLIST"]
-    return jsonify(tags), 200
-
 @posts_api.route('/getImage', methods=['GET'])
 def get_image():
     '''Get an image from the server by id'''
@@ -67,14 +56,15 @@ def get_image():
     try:
         url = send_query("SELECT ImageURL FROM Posts WHERE PostID = %s", [id])[0][0]
         image = base64.b64encode(open(IMAGE_DIR + url, 'rb').read())
+        close_db()
         return image, 200
     except:
         return "Something went wrong...", 400
 
 @posts_api.route('/getPosts', methods=['GET'])
 def get_posts():
+    start_time = datetime.now()
     '''Get posts from the database by location, page number, radius, and tags'''
-    
     # Grab the arguments provided in the request
     tags = request.args.getlist('tags')
     latitude = request.args.get('latitude', None)
@@ -107,8 +97,23 @@ def get_posts():
         pageNum = int(pageNum)
     cmd_params.insert(0, pageNum)
     res = send_get_posts(cmd_params)
-    res = jsonify_get(res)
-    res = filter_location(res, float(latitude), float(longitude), float(radius)) if radius is not None else res
+    # If there are no results, return an empty list as the next steps are unnecessary
+    if not res:
+        return jsonify(res), 200
+    
+    response_json = jsonify_get(res)
+    # Filter the results by location if a location was specified
+    # Only have to check by radius because we already checked that the location was valid
+    if radius is not None:
+        response_json = filter_location(response_json, float(latitude), float(longitude), float(radius))
+
+    # Set the tags for the result posts
+    string_tuple = "(" + ",".join(["%s"] * len(res)) + ")"
+    tag_list = send_query("SELECT Tag, PostID FROM Tags WHERE PostID IN " + string_tuple, tuple([result["id"] for result in res]))
+    for result in res:
+        result["tags"] = [tag[0] for tag in tag_list if tag[0] != "ENDLIST" and tag[1] == result["id"]]
+
+    close_db()
 
     return jsonify(res), 200
 
@@ -116,7 +121,6 @@ def get_posts():
 def upload_post():
     '''Upload a post to the database and store the image in the file system'''
     # Grab the arguments provided in the request
-    
     if request.form.get('tags', None) is not None:
         tags = json.loads(request.form.get('tags'))
     else: 
@@ -146,16 +150,23 @@ def upload_post():
     tags = str_tags(tags)
     cmd_params = [image_path, latitude, longitude, user, tags]
     send_upload_post(cmd_params)
+    close_db()
     return "", 200
 
-# @posts_api.route('/removePost', methods=['DELETE'])
-# def remove_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/removePost/<id>', methods=['DELETE'])
+# def remove_post(id):
+#     res = send_query("DELETE FROM Posts WHERE PostID = %s", [id])
+#     print("Res from delete is " + str(res))
+#     return "", 200
 
-# @posts_api.route('/viewPost', methods=['PATCH'])
-# def view_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/viewPost/<id>', methods=['PATCH'])
+# def view_post(id):
+#     res = send_query("UPDATE Posts SET Views = Views + 1 WHERE PostID = %s", [id])
+#     print("Res from update is " + str(res))
+#     return "", 200
 
-# @posts_api.route('/updatePost', methods=['PATCH'])
-# def update_post():
-#     return "Unimplemented", 400
+# @posts_api.route('/updatePost/<id>', methods=['PATCH'])
+# def update_post(id):
+#     '''Update a post in the database'''
+
+#     return "", 200

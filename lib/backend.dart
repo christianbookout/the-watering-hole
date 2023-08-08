@@ -20,8 +20,8 @@ class Post {
       required this.latitude,
       required this.longitude});
 
-  Post.all(this.id, this.tags, this.latitude, this.longitude,
-      [this.imageFile, this.date, this.poster, this.views]);
+  Post.all(this.id, this.tags, this.latitude, this.longitude, this.imageFile,
+      this.date, this.poster, this.views);
 
   @override
   String toString() {
@@ -29,18 +29,18 @@ class Post {
   }
 }
 
+final String url =
+    '192.168.1.66:5000'; //'192.168.1.84:5000';/*'162.156.55.214:5000';*/
+
 // Get an image by the post ID
 Future<Image> getImage(int postID) async {
-  var request = Uri.http(
-      '162.156.55.214:5000', 'posts/getImage', {'id': postID.toString()});
+  var request = Uri.http(url, 'posts/getImage', {'id': postID.toString()});
   var response = await http.get(request);
   if (response.statusCode == 200) {
-    print("Yes ${postID}");
-    return Image.memory(base64Decode(response.body),
-        key: const ValueKey('image'));
+    return Image.memory(base64Decode(response.body));
   } else {
-    print("No ${postID}");
-    throw Exception("Failed to get image");
+    throw Exception(
+        "Failed to get image for post $postID with error code ${response.statusCode}");
   }
 }
 
@@ -51,16 +51,17 @@ Future<void> uploadPost(Post post) async {
   }
   // var fileBytes = await post.imageFile!.openRead();
   var bytes = await post.imageFile!.readAsBytes();
-  var image = base64Encode(bytes);
-  var uri = Uri.http('162.156.55.214:5000', 'posts/uploadPost');
+  var image = http.MultipartFile.fromString('image', base64Encode(bytes));
+  var uri = Uri.http(url, 'posts/uploadPost');
+  var tags = json.encode(post.tags.map((e) => e.trim()).toList());
   var request = http.MultipartRequest("POST", uri)
     ..fields.addAll({
       'latitude': post.latitude.toString(),
       'longitude': post.longitude.toString(),
       'user': '1', // TODO user id
-      'tags[]': post.tags.first,
-      'image': image,
-    });
+      'tags': tags,
+    })
+    ..files.add(image);
   var response = await request.send();
   if (response.statusCode == 400) {
     throw Exception("A parameter has been inputted incorrectly");
@@ -84,21 +85,14 @@ Future<List<Post>> getPosts(
     "radius": radius,
     "pageNum": pageNum.toString(),
   }..removeWhere((_, value) => value == null);
-  var url = Uri.http('162.156.55.214:5000', '/posts/getPosts', queryParams);
-  var response = await http.get(url);
+  var requestUrl = Uri.http(url, '/posts/getPosts', queryParams);
+  var response = await http.get(requestUrl);
   if (response.statusCode == 200) {
     var json = jsonDecode(response.body);
     List<Post> posts = <Post>[];
     for (var v in json) {
-      posts.add(Post.all(
-          v["id"],
-          [],
-          v["latitude"],
-          v["longitude"],
-          null,
-          DateTime.now(), // TODO time
-          v["poster"],
-          v["views"]));
+      posts.add(Post.all(v["id"], v["tags"], v["latitude"], v["longitude"],
+          null, DateTime.tryParse(v["date"]), v["poster"], v["views"]));
     }
     return posts;
   } else if (response.statusCode == 400) {

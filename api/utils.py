@@ -2,29 +2,41 @@ from db import get_db
 
 db = get_db()
 
+def db_connect(func):
+    '''Decorator to connect to the database if not already connected'''
+    def connect(*args, **kwargs):
+        if not db.is_connected():
+            db.connect()
+        return func(*args, **kwargs)
+    return connect
+
+@db_connect
 def send_query(query, args):
-    db.reconnect(delay=1, attempts=5)
+    '''Send a query to the database'''
     cur = db.cursor()
     cur.execute(query, args)
     result = cur.fetchall()
     db.commit()
-    db.close()
     return result
 
+@db_connect
 def send_upload_post(args):
-    db.reconnect()
+    '''Upload a post to the database'''
     cur = db.cursor()
     cur.callproc("uploadPost", args)
     result = cur.fetchall()
     db.commit()
-    db.close()
     return result
 
+@db_connect
 def send_get_posts(args):
-    db.reconnect()
+    '''Get posts from the database'''
     cur = db.cursor()
     cur.callproc("getPosts", args)
     result = [r.fetchall() for r in cur.stored_results()]
     db.commit()
-    db.close()
     return result[0]
+
+def close_db():
+    '''Close the database connection'''
+    db.close()
